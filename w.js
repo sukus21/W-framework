@@ -131,6 +131,11 @@ W = {
     // When everything is loaded: set default light / camera
     W.light({y: -1});
     W.camera({fov: 30});
+
+    // Build model data for queued models
+    for (shader in W.models) {
+      W.buildModelData(W.models[shader]);
+    }
     
     // Draw the scene. Ignore the first frame because the default camera will probably be overwritten by the program
     setTimeout(W.draw, 16);
@@ -171,33 +176,6 @@ W = {
     // merge previous state (or default state) with the new state passed in parameter,
     // and reset f (the animation timer)
     state = {type, ...(W.current[state.n] = W.next[state.n] || {w:1, h:1, d:1, x:0, y:0, z:0, rx:0, ry:0, rz:0, b:"888", mode:4 /* TRIANGLES */, mix: 0}), ...state, f:0};
-    
-    // Build the model's vertices buffer if it doesn't exist yet
-    if (W.models[state.type]?.vertices && !W.models?.[state.type].verticesBuffer) {
-      W.gl.bindBuffer(34962 /* ARRAY_BUFFER */, W.models[state.type].verticesBuffer = W.gl.createBuffer());
-      W.gl.bufferData(34962 /* ARRAY_BUFFER */, new Float32Array(W.models[state.type].vertices), 35044 /* STATIC_DRAW */);
-
-      // Compute smooth normals if they don't exist yet (optional)
-      if (!W.models[state.type].normals && W.plugin.smooth) W.smooth(state);
-      
-      // Make a buffer from the smooth/custom normals (if any)
-      if (W.models[state.type].normals) {
-        W.gl.bindBuffer(34962 /* ARRAY_BUFFER */, W.models[state.type].normalsBuffer = W.gl.createBuffer());
-        W.gl.bufferData(34962 /* ARRAY_BUFFER */, new Float32Array(W.models[state.type].normals.flat()), 35044 /* STATIC_DRAW */); 
-      }      
-    }
-    
-    // Build the model's uv buffer (if any) if it doesn't exist yet
-    if (W.models[state.type]?.uv && !W.models[state.type].uvBuffer) {
-      W.gl.bindBuffer(34962 /* ARRAY_BUFFER */, W.models[state.type].uvBuffer = W.gl.createBuffer());
-      W.gl.bufferData(34962 /* ARRAY_BUFFER */, new Float32Array(W.models[state.type].uv), 35044 /*STATIC_DRAW*/); 
-    }
-    
-    // Build the model's index buffer (if any) and smooth normals if they don't exist yet
-    if (W.models[state.type]?.indices && !W.models[state.type].indicesBuffer) {
-      W.gl.bindBuffer(34963 /* ELEMENT_ARRAY_BUFFER */, W.models[state.type].indicesBuffer = W.gl.createBuffer());
-      W.gl.bufferData(34963 /* ELEMENT_ARRAY_BUFFER */, new Uint16Array(W.models[state.type].indices), 35044 /* STATIC_DRAW */);
-    }
     
     // Set mix to 1 if no texture is set
     if (!state.t) {
@@ -457,12 +435,42 @@ W = {
   col: c => [...c.replace("#","").match(c.length < 5 ? /./g : /../g).map(a => ("0x" + a) / (c.length < 5 ? 15 : 255)), 1], // rgb / rgba / rrggbb / rrggbbaa
   
   // Add a new 3D model
-  add: (name, objects) => {
-    W.models[name] = objects;
-    if (objects.normals) {
+  add: (name, model) => {
+    if (W.gl) buildModelData(model);
+
+    W.models[name] = model;
+    if (model.normals) {
       W.models[name].customNormals = 1;
     }
     W[name] = settings => W.setState(settings, name);
+  },
+
+  // Build WebGL buffers from model and send them to the GPU
+  buildModelData: (model) => {
+    // Build the model's vertices buffer
+    W.gl.bindBuffer(34962 /* ARRAY_BUFFER */, model.verticesBuffer = W.gl.createBuffer());
+    W.gl.bufferData(34962 /* ARRAY_BUFFER */, new Float32Array(model.vertices), 35044 /* STATIC_DRAW */);
+
+    // Compute smooth normals if they don't exist yet (optional)
+    if (!model.normals && W.plugin.smooth) W.smooth(model);
+
+    // Make a buffer from the smooth/custom normals (if any)
+    if (model.normals) {
+      W.gl.bindBuffer(34962 /* ARRAY_BUFFER */, model.normalsBuffer = W.gl.createBuffer());
+      W.gl.bufferData(34962 /* ARRAY_BUFFER */, new Float32Array(model.normals.flat()), 35044 /* STATIC_DRAW */); 
+    }
+
+    // Build the model's uv buffer (if any) if it doesn't exist yet
+    if (model.uv) {
+      W.gl.bindBuffer(34962 /* ARRAY_BUFFER */, model.uvBuffer = W.gl.createBuffer());
+      W.gl.bufferData(34962 /* ARRAY_BUFFER */, new Float32Array(model.uv), 35044 /*STATIC_DRAW*/); 
+    }
+
+    // Build the model's index buffer (if any) and smooth normals if they don't exist yet
+    if (model.indices) {
+      W.gl.bindBuffer(34963 /* ELEMENT_ARRAY_BUFFER */, model.indicesBuffer = W.gl.createBuffer());
+      W.gl.bufferData(34963 /* ELEMENT_ARRAY_BUFFER */, new Uint16Array(model.indices), 35044 /* STATIC_DRAW */);
+    }
   },
 
   delay: (func, delay) => delay ? setTimeout(func) : func(),
@@ -503,9 +511,7 @@ if (!W.built) {
 // Smooth normals computation plug-in (optional)
 // =============================================
 if (W.plugin.smooth) {
-  W.smooth = (state, dict = {}, vertices = [], vertexCount, i, j, A, B, C, Ai, Bi, Ci, AB, BC, hash, normal, model) => {
-    model = W.models[state.type];
-
+  W.smooth = (model, dict = {}, vertices = [], vertexCount, i, j, A, B, C, Ai, Bi, Ci, AB, BC, hash, normal) => {
     // Prepare smooth normals array
     model.normals = [];
     
