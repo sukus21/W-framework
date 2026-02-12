@@ -483,7 +483,7 @@ W.smooth = (state, dict = {}, vertices = [], vertexCount, i, j, A, B, C, Ai, Bi,
   }
   
   // Get number of times to iterate
-  vertexCount = (model.indices || model.vertices).length;
+  vertexCount = (model.indices || vertices).length;
     
   // Iterate twice on the vertices
   // - 1st pass: compute normals of each triangle and accumulate them for each vertex
