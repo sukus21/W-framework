@@ -471,37 +471,37 @@ W = {
 // Smooth normals computation plug-in (optional)
 // =============================================
 
-W.smooth = (state, dict = {}, vertices = [], iterate, iterateSwitch, i, j, A, B, C, Ai, Bi, Ci, normal) => {
-  
+W.smooth = (state, dict = {}, vertices = [], vertexCount, i, j, A, B, C, Ai, Bi, Ci, AB, BC, hash, normal, model) => {
+  model = W.models[state.type];
+
   // Prepare smooth normals array
-  W.models[state.type].normals = [];
+  model.normals = [];
   
   // Fill vertices array: [[x,y,z],[x,y,z]...]
-  for(i = 0; i < W.models[state.type].vertices.length; i+=3){
-    vertices.push(W.models[state.type].vertices.slice(i, i+3));
+  for(i = 0; i < model.vertices.length; i+=3){
+    vertices.push(model.vertices.slice(i, i+3));
   }
   
-  // Iterator
-  if(iterate = W.models[state.type].indices) iterateSwitch = 1;
-  else iterate = vertices, iterateSwitch = 0;
+  // Get number of times to iterate
+  vertexCount = (model.indices || model.vertices).length;
     
   // Iterate twice on the vertices
   // - 1st pass: compute normals of each triangle and accumulate them for each vertex
   // - 2nd pass: save the final smooth normals values
-  for(i = 0; i < iterate.length * 2; i+=3){
-    j = i % iterate.length;
-    A = vertices[Ai = iterateSwitch ? W.models[state.type].indices[j] : j];
-    B = vertices[Bi = iterateSwitch ? W.models[state.type].indices[j+1] : j+1];
-    C = vertices[Ci = iterateSwitch ? W.models[state.type].indices[j+2] : j+2];
+  for(i = 0; i < vertexCount * 2; i+=3){
+    j = i % vertexCount;
+    A = vertices[Ai = model.indices?.[j] ?? j];
+    B = vertices[Bi = model.indices?.[j+1] ?? j+1];
+    C = vertices[Ci = model.indices?.[j+2] ?? j+2];
     AB = [B[0] - A[0], B[1] - A[1], B[2] - A[2]];
     BC = [C[0] - B[0], C[1] - B[1], C[2] - B[2]];
     normal = i > j ? [0,0,0] : [AB[1] * BC[2] - AB[2] * BC[1], AB[2] * BC[0] - AB[0] * BC[2], AB[0] * BC[1] - AB[1] * BC[0]];
-    dict[A[0]+"_"+A[1]+"_"+A[2]] ||= [0,0,0];
-    dict[B[0]+"_"+B[1]+"_"+B[2]] ||= [0,0,0];
-    dict[C[0]+"_"+C[1]+"_"+C[2]] ||= [0,0,0];
-    W.models[state.type].normals[Ai] = dict[A[0]+"_"+A[1]+"_"+A[2]] = dict[A[0]+"_"+A[1]+"_"+A[2]].map((a,i) => a + normal[i]);
-    W.models[state.type].normals[Bi] = dict[B[0]+"_"+B[1]+"_"+B[2]] = dict[B[0]+"_"+B[1]+"_"+B[2]].map((a,i) => a + normal[i]);
-    W.models[state.type].normals[Ci] = dict[C[0]+"_"+C[1]+"_"+C[2]] = dict[C[0]+"_"+C[1]+"_"+C[2]].map((a,i) => a + normal[i]);
+    dict[hash = A.join()] ||= [0,0,0];
+    model.normals[Ai] = dict[hash] = dict[hash].map((a,i) => a + normal[i]);
+    dict[hash = B.join()] ||= [0,0,0];
+    model.normals[Bi] = dict[hash] = dict[hash].map((a,i) => a + normal[i]);
+    dict[hash = C.join()] ||= [0,0,0];
+    model.normals[Ci] = dict[hash] = dict[hash].map((a,i) => a + normal[i]);
   }
 }
 
