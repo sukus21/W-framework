@@ -7,6 +7,18 @@ W = {
   // (See the end of the file for built-in models: plane, billboard, cube, pyramid...)
   models: {},
 
+  // Object counter
+  objs: 0,
+
+  // Objects current states
+  current: {},
+  
+  // Objects next states
+  next: {},
+
+  // Textures list
+  textures: {},
+  
   // Pseudo-boolean, defined internally in Terser when building.
   // Is used further down to add all plugins, if the flag still isn't set.
   // Any usages of these properties will be removed in the minified versions thanks to Terser.
@@ -17,12 +29,8 @@ W = {
   // param: a <canvas> element
   reset: (canvas, shader) => {
     
-    // Globals
-    W.canvas = canvas;    // canvas element
-    W.objs = 0;           // Object counter
-    W.current = {};       // Objects current states
-    W.next = {};          // Objects next states
-    W.textures = {};      // Textures list
+    // Canvas element
+    W.canvas = canvas;
 
     // WebGL context
     W.gl = canvas.getContext("webgl2");
