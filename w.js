@@ -631,5 +631,5 @@ W.add("pyramid", {
       }
     }
   }
-  // W.add("sphere", {vertices, uv, indices});
+  W.add("sphere", {vertices, uv, indices});
 })();
