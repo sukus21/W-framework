@@ -24,7 +24,7 @@ W = {
     W.textures = {};      // Textures list
 
     // WebGL context
-    W.gl = canvas.getContext('webgl2');
+    W.gl = canvas.getContext("webgl2");
     
     // Default blending method for transparent objects
     W.gl.blendFunc(770 /* SRC_ALPHA */, 771 /* ONE_MINUS_SRC_ALPHA */);
@@ -65,7 +65,7 @@ W = {
     // Compile the Vertex shader and attach it to the program
     W.gl.compileShader(shader);
     W.gl.attachShader(W.program, shader);
-    if(debug) console.log('vertex shader:', W.gl.getShaderInfoLog(shader) || 'OK');
+    if (debug) console.log("vertex shader:", W.gl.getShaderInfoLog(shader) || "OK");
     
     // Create a Fragment shader
     // (This GLSL program is called for every fragment (pixel) of the scene)
@@ -84,7 +84,7 @@ W = {
       // The code below displays colored / textured / shaded fragments
       void main() {
         c = mix(texture(sampler, v_uv.xy), v_col, o[3]);  // base color (mix of texture and rgba)
-        if(o[1] > 0.){                                    // if lighting/shading is enabled:
+        if (o[1] > 0.) {                                  // if lighting/shading is enabled:
           c = vec4(                                       // output = vec4(base color RGB * (directional shading + ambient light)), base color Alpha
             c.rgb * (max(0., dot(light, -normalize(       // Directional shading: compute dot product of light direction and normal (0 if negative)
               o[0] > 0.                                   // if smooth shading is enabled:
@@ -101,12 +101,12 @@ W = {
     // Compile the Fragment shader and attach it to the program
     W.gl.compileShader(shader);
     W.gl.attachShader(W.program, shader);
-    if(debug) console.log('fragment shader:', W.gl.getShaderInfoLog(shader) || 'OK');
+    if (debug) console.log("fragment shader:", W.gl.getShaderInfoLog(shader) || "OK");
     
     // Compile the program
     W.gl.linkProgram(W.program);
     W.gl.useProgram(W.program);
-    if(debug) console.log('program:', W.gl.getProgramInfoLog(W.program) || 'OK');
+    if (debug) console.log("program:", W.gl.getProgramInfoLog(W.program) || "OK");
     
     // Set the scene's background color (RGBA)
     W.gl.clearColor(1, 1, 1, 1);
@@ -130,14 +130,14 @@ W = {
   // Set a state to an object
   setState: (state, type, texture) => {
 
-    // Custom name or default name ('o' + auto-increment)
-    state.n ||= 'o' + W.objs++;
+    // Custom name or default name ("o" + auto-increment)
+    state.n ||= "o" + W.objs++;
     
     // Size sets w, h and d at once (optional)
-    if(state.size) state.w = state.h = state.d = state.size;
+    if (state.size) state.w = state.h = state.d = state.size;
     
     // If a new texture is provided, build it and save it in W.textures
-    if(state.t && state.t.width && !W.textures[state.t.id]){
+    if (state.t && state.t.width && !W.textures[state.t.id]) {
       texture = W.gl.createTexture();
       W.gl.pixelStorei(37441 /* UNPACK_PREMULTIPLY_ALPHA_WEBGL */, true);
       W.gl.bindTexture(3553 /* TEXTURE_2D */, texture);
@@ -148,7 +148,7 @@ W = {
     }
     
     // Recompute the projection matrix if fov is set (near: 1, far: 1000, ratio: canvas ratio)
-    if(state.fov){
+    if (state.fov) {
       W.projection =     
         new DOMMatrix([
           (1 / Math.tan(state.fov * Math.PI / 180)) / (W.canvas.width / W.canvas.height), 0, 0, 0, 
@@ -161,42 +161,42 @@ W = {
     // Save object's type,
     // merge previous state (or default state) with the new state passed in parameter,
     // and reset f (the animation timer)
-    state = {type, ...(W.current[state.n] = W.next[state.n] || {w:1, h:1, d:1, x:0, y:0, z:0, rx:0, ry:0, rz:0, b:'888', mode:4 /* TRIANGLES */, mix: 0}), ...state, f:0};
+    state = {type, ...(W.current[state.n] = W.next[state.n] || {w:1, h:1, d:1, x:0, y:0, z:0, rx:0, ry:0, rz:0, b:"888", mode:4 /* TRIANGLES */, mix: 0}), ...state, f:0};
     
     // Build the model's vertices buffer if it doesn't exist yet
-    if(W.models[state.type]?.vertices && !W.models?.[state.type].verticesBuffer){
+    if (W.models[state.type]?.vertices && !W.models?.[state.type].verticesBuffer) {
       W.gl.bindBuffer(34962 /* ARRAY_BUFFER */, W.models[state.type].verticesBuffer = W.gl.createBuffer());
       W.gl.bufferData(34962 /* ARRAY_BUFFER */, new Float32Array(W.models[state.type].vertices), 35044 /* STATIC_DRAW */);
 
       // Compute smooth normals if they don't exist yet (optional)
-      if(!W.models[state.type].normals && W.smooth) W.smooth(state);
+      if (!W.models[state.type].normals && W.plugin.smooth) W.smooth(state);
       
       // Make a buffer from the smooth/custom normals (if any)
-      if(W.models[state.type].normals){
+      if (W.models[state.type].normals) {
         W.gl.bindBuffer(34962 /* ARRAY_BUFFER */, W.models[state.type].normalsBuffer = W.gl.createBuffer());
         W.gl.bufferData(34962 /* ARRAY_BUFFER */, new Float32Array(W.models[state.type].normals.flat()), 35044 /* STATIC_DRAW */); 
       }      
     }
     
     // Build the model's uv buffer (if any) if it doesn't exist yet
-    if(W.models[state.type]?.uv && !W.models[state.type].uvBuffer){
+    if (W.models[state.type]?.uv && !W.models[state.type].uvBuffer) {
       W.gl.bindBuffer(34962 /* ARRAY_BUFFER */, W.models[state.type].uvBuffer = W.gl.createBuffer());
       W.gl.bufferData(34962 /* ARRAY_BUFFER */, new Float32Array(W.models[state.type].uv), 35044 /*STATIC_DRAW*/); 
     }
     
     // Build the model's index buffer (if any) and smooth normals if they don't exist yet
-    if(W.models[state.type]?.indices && !W.models[state.type].indicesBuffer){
+    if (W.models[state.type]?.indices && !W.models[state.type].indicesBuffer) {
       W.gl.bindBuffer(34963 /* ELEMENT_ARRAY_BUFFER */, W.models[state.type].indicesBuffer = W.gl.createBuffer());
       W.gl.bufferData(34963 /* ELEMENT_ARRAY_BUFFER */, new Uint16Array(W.models[state.type].indices), 35044 /* STATIC_DRAW */);
     }
     
     // Set mix to 1 if no texture is set
-    if(!state.t){
+    if (!state.t) {
       state.mix = 1;
     }
 
     // set mix to 0 by default if a texture is set
-    else if(state.t && !state.mix){
+    else if (state.t && !state.mix) {
       state.mix = 0;
     }
     
@@ -212,15 +212,15 @@ W = {
     W.lastFrame = now;
     requestAnimationFrame(W.draw);
     
-    if(W.next.camera.g){
+    if (W.next.camera.g) {
       W.render(W.next[W.next.camera.g], dt, 1);
     }
     
     // Create a matrix called v containing the current camera transformation
-    v = W.animation('camera');
+    v = W.animation("camera");
     
     // If the camera is in a group
-    if(W.next?.camera?.g){
+    if (W.next?.camera?.g) {
 
       // premultiply the camera matrix by the group's model matrix.
       v.preMultiplySelf(W.next[W.next.camera.g].M || W.next[W.next.camera.g].m);
@@ -228,7 +228,7 @@ W = {
     
     // Send it to the shaders as the Eye matrix
     W.gl.uniformMatrix4fv(
-      W.gl.getUniformLocation(W.program, 'eye'),
+      W.gl.getUniformLocation(W.program, "eye"),
       false,
       v.toFloat32Array()
     );
@@ -241,7 +241,7 @@ W = {
     
     // send it to the shaders as the pv matrix
     W.gl.uniformMatrix4fv(
-      W.gl.getUniformLocation(W.program, 'pv'),
+      W.gl.getUniformLocation(W.program, "pv"),
       false,
       v.toFloat32Array()
     );
@@ -250,10 +250,10 @@ W = {
     W.gl.clear(16640 /* W.gl.COLOR_BUFFER_BIT | W.gl.DEPTH_BUFFER_BIT */);
     
     // Render all the objects in the scene
-    for(i in W.next){
+    for (i in W.next) {
       
       // Render the shapes with no texture and no transparency (RGB1 color)
-      if(!W.next[i].t && W.col(W.next[i].b)[3] == 1){
+      if (!W.next[i].t && W.col(W.next[i].b)[3] == 1) {
         W.render(W.next[i], dt);
       }
       
@@ -274,10 +274,10 @@ W = {
     W.gl.enable(3042 /* BLEND */);
 
     // Render all transparent objects
-    for(i of transparent){
+    for (i of transparent) {
 
       // Disable depth buffer write if it's a plane or a billboard to allow transparent objects to intersect planes more easily
-      if(["plane","billboard"].includes(i.type)) W.gl.depthMask(0);
+      if (["plane","billboard"].includes(i.type)) W.gl.depthMask(0);
     
       W.render(i, dt);
       
@@ -289,35 +289,35 @@ W = {
     
     // Transition the light's direction and send it to the shaders
     W.gl.uniform3f(
-      W.gl.getUniformLocation(W.program, 'light'),
-      W.lerp('light','x'), W.lerp('light','y'), W.lerp('light','z')
+      W.gl.getUniformLocation(W.program, "light"),
+      W.lerp("light","x"), W.lerp("light","y"), W.lerp("light","z")
     );
   },
   
   // Render an object
-  render: (object, dt, just_compute = ['camera','light','group'].includes(object.type), buffer) => {
+  render: (object, dt, just_compute = ["camera","light","group"].includes(object.type), buffer) => {
 
     // If the object has a texture
-    if(object.t) {
+    if (object.t) {
 
       // Set the texture's target (2D or cubemap)
       W.gl.bindTexture(3553 /* TEXTURE_2D */, W.textures[object.t.id]);
 
       // Pass texture 0 to the sampler
-      W.gl.uniform1i(W.gl.getUniformLocation(W.program, 'sampler'), 0);
+      W.gl.uniform1i(W.gl.getUniformLocation(W.program, "sampler"), 0);
     }
 
     // If the object has an animation, increment its timer...
-    if(object.f < object.a) object.f += dt;
+    if (object.f < object.a) object.f += dt;
     
     // ...but don't let it go over the animation duration.
-    if(object.f > object.a) object.f = object.a;
+    if (object.f > object.a) object.f = object.a;
 
     // Compose the model matrix from lerped transformations
     W.next[object.n].m = W.animation(object.n);
 
     // If the object is in a group:
-    if(W.next[object.g]){
+    if (W.next[object.g]) {
 
       // premultiply the model matrix by the group's model matrix.
       W.next[object.n].m.preMultiplySelf(W.next[object.g].M || W.next[object.g].m);
@@ -325,44 +325,44 @@ W = {
 
     // send the model matrix to the vertex shader
     W.gl.uniformMatrix4fv(
-      W.gl.getUniformLocation(W.program, 'm'),
+      W.gl.getUniformLocation(W.program, "m"),
       false,
       (W.next[object.n].M || W.next[object.n].m).toFloat32Array()
     );
     
     // send the inverse of the model matrix to the vertex shader
     W.gl.uniformMatrix4fv(
-      W.gl.getUniformLocation(W.program, 'im'),
+      W.gl.getUniformLocation(W.program, "im"),
       false,
       (new DOMMatrix(W.next[object.n].M || W.next[object.n].m)).invertSelf().toFloat32Array()
     );
     
     // Don't render invisible items (camera, light, groups, camera's parent)
-    if(!just_compute){
+    if (!just_compute) {
       
       // Set up the position buffer
       W.gl.bindBuffer(34962 /* ARRAY_BUFFER */, W.models[object.type].verticesBuffer);
-      W.gl.vertexAttribPointer(buffer = W.gl.getAttribLocation(W.program, 'pos'), 3, 5126 /* FLOAT */, false, 0, 0)
+      W.gl.vertexAttribPointer(buffer = W.gl.getAttribLocation(W.program, "pos"), 3, 5126 /* FLOAT */, false, 0, 0)
       W.gl.enableVertexAttribArray(buffer);
       
       // Set up the texture coordinatess buffer (if any)
-      if(W.models[object.type].uvBuffer){
+      if (W.models[object.type].uvBuffer) {
         W.gl.bindBuffer(34962 /* ARRAY_BUFFER */, W.models[object.type].uvBuffer);
-        W.gl.vertexAttribPointer(buffer = W.gl.getAttribLocation(W.program, 'uv'), 2, 5126 /* FLOAT */, false, 0, 0);
+        W.gl.vertexAttribPointer(buffer = W.gl.getAttribLocation(W.program, "uv"), 2, 5126 /* FLOAT */, false, 0, 0);
         W.gl.enableVertexAttribArray(buffer);
       }
       
       // Set the normals buffer
-      if((object.s || W.models[object.type].customNormals) && W.models[object.type].normalsBuffer){
+      if ((object.s || W.models[object.type].customNormals) && W.models[object.type].normalsBuffer) {
         W.gl.bindBuffer(34962 /* ARRAY_BUFFER */, W.models[object.type].normalsBuffer);
-        W.gl.vertexAttribPointer(buffer = W.gl.getAttribLocation(W.program, 'normal'), 3, 5126 /* FLOAT */, false, 0, 0);
+        W.gl.vertexAttribPointer(buffer = W.gl.getAttribLocation(W.program, "normal"), 3, 5126 /* FLOAT */, false, 0, 0);
         W.gl.enableVertexAttribArray(buffer);
       }
       
       // Other options: [smooth, shading enabled, ambient light, texture/color mix]
       W.gl.uniform4f(
 
-        W.gl.getUniformLocation(W.program, 'o'), 
+        W.gl.getUniformLocation(W.program, "o"), 
         
         // Enable smooth shading if "s" is true
         object.s,
@@ -380,34 +380,34 @@ W = {
       // If the object is a billboard: send a specific uniform to the shaders:
       // [width, height, isBillboard = 1, 0]
       W.gl.uniform4f(
-        W.gl.getUniformLocation(W.program, 'bb'),
+        W.gl.getUniformLocation(W.program, "bb"),
         
         // Size
         object.w,
         object.h,               
 
         // is a billboard
-        object.type == 'billboard',
+        object.type == "billboard",
         
         // Reserved
         0
       );
       
       // Set up the indices (if any)
-      if(W.models[object.type].indicesBuffer){
+      if (W.models[object.type].indicesBuffer) {
         W.gl.bindBuffer(34963 /* ELEMENT_ARRAY_BUFFER */, W.models[object.type].indicesBuffer);
       }
         
       // Set the object's color
       W.gl.vertexAttrib4fv(
-        W.gl.getAttribLocation(W.program, 'col'),
+        W.gl.getAttribLocation(W.program, "col"),
         W.col(object.b)
       );
 
       // Draw
       // Both indexed and unindexed models are supported.
       // You can keep the "drawElements" only if all your models are indexed.
-      if(W.models[object.type].indicesBuffer){
+      if (W.models[object.type].indicesBuffer) {
         W.gl.drawElements(object.mode, W.models[object.type].indices.length, 5123 /* UNSIGNED_SHORT */, 0);
       }
       else {
@@ -429,9 +429,9 @@ W = {
   animation: (item, m = new DOMMatrix) =>
     W.next[item]
     ? m
-      .translateSelf(W.lerp(item, 'x'), W.lerp(item, 'y'), W.lerp(item, 'z'))
-      .rotateSelf(W.lerp(item, 'rx'),W.lerp(item, 'ry'),W.lerp(item, 'rz'))
-      .scaleSelf(W.lerp(item, 'w'),W.lerp(item, 'h'),W.lerp(item, 'd'))
+      .translateSelf(W.lerp(item, "x"), W.lerp(item, "y"), W.lerp(item, "z"))
+      .rotateSelf(W.lerp(item, "rx"),W.lerp(item, "ry"),W.lerp(item, "rz"))
+      .scaleSelf(W.lerp(item, "w"),W.lerp(item, "h"),W.lerp(item, "d"))
     : m,
     
   // Compute the distance squared between two objects (useful for sorting transparent items)
@@ -441,12 +441,12 @@ W = {
   ambient: a => W.ambientLight = a,
   
   // Convert an rgb/rgba hex string into a vec4
-  col: c => [...c.replace("#","").match(c.length < 5 ? /./g : /../g).map(a => ('0x' + a) / (c.length < 5 ? 15 : 255)), 1], // rgb / rgba / rrggbb / rrggbbaa
+  col: c => [...c.replace("#","").match(c.length < 5 ? /./g : /../g).map(a => ("0x" + a) / (c.length < 5 ? 15 : 255)), 1], // rgb / rgba / rrggbb / rrggbbaa
   
   // Add a new 3D model
   add: (name, objects) => {
     W.models[name] = objects;
-    if(objects.normals){
+    if (objects.normals) {
       W.models[name].customNormals = 1;
     }
     W[name] = settings => W.setState(settings, name);
@@ -457,15 +457,15 @@ W = {
   // Built-in objects
   // ----------------
   
-  group: state => W.setState(state, 'group'),
+  group: state => W.setState(state, "group"),
   
   move: (state, delay = 1) => W.delay(x => W.setState(state), delay),
   
   delete: (state, delay = 1) => W.delay(x => delete W.next[state], delay),
   
-  camera: (state, delay = 1) => W.delay(x => W.setState(state, state.n = 'camera'), delay),
+  camera: (state, delay = 1) => W.delay(x => W.setState(state, state.n = "camera"), delay),
     
-  light: (state, delay) => W.delay(x => W.setState(state, state.n = 'light'), delay),
+  light: (state, delay) => W.delay(x => W.setState(state, state.n = "light"), delay),
 };
 
 // Smooth normals computation plug-in (optional)
@@ -478,7 +478,7 @@ W.smooth = (state, dict = {}, vertices = [], vertexCount, i, j, A, B, C, Ai, Bi,
   model.normals = [];
   
   // Fill vertices array: [[x,y,z],[x,y,z]...]
-  for(i = 0; i < model.vertices.length; i+=3){
+  for (i = 0; i < model.vertices.length; i += 3) {
     vertices.push(model.vertices.slice(i, i+3));
   }
   
@@ -488,7 +488,7 @@ W.smooth = (state, dict = {}, vertices = [], vertexCount, i, j, A, B, C, Ai, Bi,
   // Iterate twice on the vertices
   // - 1st pass: compute normals of each triangle and accumulate them for each vertex
   // - 2nd pass: save the final smooth normals values
-  for(i = 0; i < vertexCount * 2; i+=3){
+  for (i = 0; i < vertexCount * 2; i += 3) {
     j = i % vertexCount;
     A = vertices[Ai = model.indices?.[j] ?? j];
     B = vertices[Bi = model.indices?.[j+1] ?? j+1];
@@ -620,13 +620,13 @@ W.add("pyramid", {
 //          =   =
 
 ((i, ai, j, aj, p1, p2, vertices = [], indices = [], uv = [], precision = 20) => {
-  for(j = 0; j <= precision; j++){
+    for (j = 0; j <= precision; j++) {
     aj = j * Math.PI / precision;
-    for(i = 0; i <= precision; i++){
+      for (i = 0; i <= precision; i++) {
       ai = i * 2 * Math.PI / precision;
       vertices.push(Math.sin(ai) * Math.sin(aj)/2, Math.cos(aj)/2, Math.cos(ai) * Math.sin(aj)/2);
       uv.push((Math.sin((i/precision))) * 3.5, -Math.sin(j/precision))
-      if(i < precision && j < precision){
+        if (i < precision && j < precision) {
         indices.push(p1 = j * (precision + 1) + i, p2 = p1 + (precision + 1), (p1 + 1), (p1 + 1), p2, (p2 + 1));
       }
     }
