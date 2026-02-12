@@ -420,10 +420,10 @@ W = {
   // -------
   
   // Interpolate a property between two values
-  lerp: (item, property) => 
-    W.next[item]?.a
-    ? W.current[item][property] + (W.next[item][property] -  W.current[item][property]) * (W.next[item].f / W.next[item].a)
-    : W.next[item][property],
+  lerp: (item, property, current = W.current[item], next = W.next[item]) => 
+    next?.a
+    ? current[property] + (next[property] -  current[property]) * (next.f / next.a)
+    : next[property],
   
   // Transition an item
   animation: (item, m = new DOMMatrix) =>
