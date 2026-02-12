@@ -128,7 +128,7 @@ W = {
   },
 
   // Set a state to an object
-  setState: (state, type, texture, i, normal = [], A, B, C, Ai, Bi, Ci, AB, BC) => {
+  setState: (state, type, texture) => {
 
     // Custom name or default name ('o' + auto-increment)
     state.n ||= 'o' + W.objs++;
