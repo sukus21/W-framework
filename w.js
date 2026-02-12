@@ -451,19 +451,21 @@ W = {
     }
     W[name] = settings => W.setState(settings, name);
   },
+
+  delay: (func, delay) => delay ? setTimeout(func) : func(),
   
   // Built-in objects
   // ----------------
   
-  group: t => W.setState(t, 'group'),
+  group: state => W.setState(state, 'group'),
   
-  move: (t, delay) => setTimeout(()=>{ W.setState(t) }, delay || 1),
+  move: (state, delay = 1) => W.delay(x => W.setState(state), delay),
   
-  delete: (t, delay) => setTimeout(()=>{ delete W.next[t] }, delay || 1),
+  delete: (state, delay = 1) => W.delay(x => delete W.next[state], delay),
   
-  camera: (t, delay) => setTimeout(()=>{ W.setState(t, t.n = 'camera') }, delay || 1),
+  camera: (state, delay = 1) => W.delay(x => W.setState(state, state.n = 'camera'), delay),
     
-  light: (t, delay) => delay ? setTimeout(()=>{ W.setState(t, t.n = 'light') }, delay) : W.setState(t, t.n = 'light'),
+  light: (state, delay) => W.delay(x => W.setState(state, state.n = 'light'), delay),
 };
 
 // Smooth normals computation plug-in (optional)
