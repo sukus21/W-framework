@@ -1,16 +1,17 @@
 // WebGL framework
 // ===============
 
-debug = 1; // Enable shader/program compilation logs (optional)
-
 W = {
   
   // List of 3D models that can be rendered by the framework
   // (See the end of the file for built-in models: plane, billboard, cube, pyramid...)
   models: {},
-  
-  // List of custom renderers
-  //renderers: {},
+
+  // Pseudo-boolean, defined internally in Terser when building.
+  // Is used further down to add all plugins, if the flag still isn't set.
+  // Any usages of these properties will be removed in the minified versions thanks to Terser.
+  // built: true,
+  // plugin: {},
 
   // Reset the framework
   // param: a <canvas> element
@@ -65,7 +66,7 @@ W = {
     // Compile the Vertex shader and attach it to the program
     W.gl.compileShader(shader);
     W.gl.attachShader(W.program, shader);
-    if (debug) console.log("vertex shader:", W.gl.getShaderInfoLog(shader) || "OK");
+    if (W.plugin.debug) console.log("vertex shader:", W.gl.getShaderInfoLog(shader) || "OK");
     
     // Create a Fragment shader
     // (This GLSL program is called for every fragment (pixel) of the scene)
@@ -101,12 +102,12 @@ W = {
     // Compile the Fragment shader and attach it to the program
     W.gl.compileShader(shader);
     W.gl.attachShader(W.program, shader);
-    if (debug) console.log("fragment shader:", W.gl.getShaderInfoLog(shader) || "OK");
+    if (W.plugin.debug) console.log("fragment shader:", W.gl.getShaderInfoLog(shader) || "OK");
     
     // Compile the program
     W.gl.linkProgram(W.program);
     W.gl.useProgram(W.program);
-    if (debug) console.log("program:", W.gl.getProgramInfoLog(W.program) || "OK");
+    if (W.plugin.debug) console.log("program:", W.gl.getProgramInfoLog(W.program) || "OK");
     
     // Set the scene's background color (RGBA)
     W.gl.clearColor(1, 1, 1, 1);
@@ -277,11 +278,15 @@ W = {
     for (i of transparent) {
 
       // Disable depth buffer write if it's a plane or a billboard to allow transparent objects to intersect planes more easily
-      if (["plane","billboard"].includes(i.type)) W.gl.depthMask(0);
+      if (W.plugin.builtinShapes) {
+        if (["plane","billboard"].includes(i.type)) W.gl.depthMask(0);
+      }
     
       W.render(i, dt);
       
-      W.gl.depthMask(1);
+      if (W.plugin.builtinShapes) {
+        W.gl.depthMask(1);
+      }
     }
     
     // Disable alpha blending for the next frame
@@ -387,7 +392,7 @@ W = {
         object.h,               
 
         // is a billboard
-        object.type == "billboard",
+        (W.plugin.builtinShapes) ? object.type == "billboard" : 0,
         
         // Reserved
         0
@@ -468,40 +473,60 @@ W = {
   light: (state, delay) => W.delay(x => W.setState(state, state.n = "light"), delay),
 };
 
+
+// Define W plugins for w.js instance running from source
+// ======================================================
+
+// If the "W.built" flag IS set at build-time, this block won't be compiled in.
+// If the flag is NOT set, that means this is a version running from the W source code.
+// In that case, we should enable all plugins.
+//
+// If you need to test the absence of a plugin, flip the value to "false" here.
+// See "built.sh" for which plugins are enabled in which verions.
+if (!W.built) {
+  W.plugin = {
+    debug: true,
+    smooth: true,
+    builtinShapes: true,
+  };
+}
+
+
 // Smooth normals computation plug-in (optional)
 // =============================================
+if (W.plugin.smooth) {
+  W.smooth = (state, dict = {}, vertices = [], vertexCount, i, j, A, B, C, Ai, Bi, Ci, AB, BC, hash, normal, model) => {
+    model = W.models[state.type];
 
-W.smooth = (state, dict = {}, vertices = [], vertexCount, i, j, A, B, C, Ai, Bi, Ci, AB, BC, hash, normal, model) => {
-  model = W.models[state.type];
-
-  // Prepare smooth normals array
-  model.normals = [];
-  
-  // Fill vertices array: [[x,y,z],[x,y,z]...]
-  for (i = 0; i < model.vertices.length; i += 3) {
-    vertices.push(model.vertices.slice(i, i+3));
-  }
-  
-  // Get number of times to iterate
-  vertexCount = (model.indices || vertices).length;
+    // Prepare smooth normals array
+    model.normals = [];
     
-  // Iterate twice on the vertices
-  // - 1st pass: compute normals of each triangle and accumulate them for each vertex
-  // - 2nd pass: save the final smooth normals values
-  for (i = 0; i < vertexCount * 2; i += 3) {
-    j = i % vertexCount;
-    A = vertices[Ai = model.indices?.[j] ?? j];
-    B = vertices[Bi = model.indices?.[j+1] ?? j+1];
-    C = vertices[Ci = model.indices?.[j+2] ?? j+2];
-    AB = [B[0] - A[0], B[1] - A[1], B[2] - A[2]];
-    BC = [C[0] - B[0], C[1] - B[1], C[2] - B[2]];
-    normal = i > j ? [0,0,0] : [AB[1] * BC[2] - AB[2] * BC[1], AB[2] * BC[0] - AB[0] * BC[2], AB[0] * BC[1] - AB[1] * BC[0]];
-    dict[hash = A.join()] ||= [0,0,0];
-    model.normals[Ai] = dict[hash] = dict[hash].map((a,i) => a + normal[i]);
-    dict[hash = B.join()] ||= [0,0,0];
-    model.normals[Bi] = dict[hash] = dict[hash].map((a,i) => a + normal[i]);
-    dict[hash = C.join()] ||= [0,0,0];
-    model.normals[Ci] = dict[hash] = dict[hash].map((a,i) => a + normal[i]);
+    // Fill vertices array: [[x,y,z],[x,y,z]...]
+    for (i = 0; i < model.vertices.length; i += 3) {
+      vertices.push(model.vertices.slice(i, i+3));
+    }
+    
+    // Get number of times to iterate
+    vertexCount = (model.indices || vertices).length;
+      
+    // Iterate twice on the vertices
+    // - 1st pass: compute normals of each triangle and accumulate them for each vertex
+    // - 2nd pass: save the final smooth normals values
+    for (i = 0; i < vertexCount * 2; i += 3) {
+      j = i % vertexCount;
+      A = vertices[Ai = model.indices?.[j] ?? j];
+      B = vertices[Bi = model.indices?.[j+1] ?? j+1];
+      C = vertices[Ci = model.indices?.[j+2] ?? j+2];
+      AB = [B[0] - A[0], B[1] - A[1], B[2] - A[2]];
+      BC = [C[0] - B[0], C[1] - B[1], C[2] - B[2]];
+      normal = i > j ? [0,0,0] : [AB[1] * BC[2] - AB[2] * BC[1], AB[2] * BC[0] - AB[0] * BC[2], AB[0] * BC[1] - AB[1] * BC[0]];
+      dict[hash = A.join()] ||= [0,0,0];
+      model.normals[Ai] = dict[hash] = dict[hash].map((a,i) => a + normal[i]);
+      dict[hash = B.join()] ||= [0,0,0];
+      model.normals[Bi] = dict[hash] = dict[hash].map((a,i) => a + normal[i]);
+      dict[hash = C.join()] ||= [0,0,0];
+      model.normals[Ci] = dict[hash] = dict[hash].map((a,i) => a + normal[i]);
+    }
   }
 }
 
@@ -518,118 +543,119 @@ W.smooth = (state, dict = {}, vertices = [], vertexCount, i, j, A, B, C, Ai, Bi,
 // All models are optional, you can remove the ones you don't need to save space
 // Custom models can be added from the same model, an OBJ importer is available on https://xem.github.io/WebGLFramework/obj2js/
 
-// Plane / billboard
-//
-//  v1------v0
-//  |       |
-//  |   x   |
-//  |       |
-//  v2------v3
+if (W.plugin.builtinShapes) {
+  // Plane / billboard
+  //
+  //  v1------v0
+  //  |       |
+  //  |   x   |
+  //  |       |
+  //  v2------v3
 
-W.add("plane", {
-  vertices: [
-    .5, .5, 0,    -.5, .5, 0,   -.5,-.5, 0,
-    .5, .5, 0,    -.5,-.5, 0,    .5,-.5, 0
-  ],
-  
-  uv: [
-    1, 1,     0, 1,    0, 0,
-    1, 1,     0, 0,    1, 0
-  ],
-});
-W.add("billboard", W.models.plane);
+  W.add("plane", {
+    vertices: [
+      .5, .5, 0,    -.5, .5, 0,   -.5,-.5, 0,
+      .5, .5, 0,    -.5,-.5, 0,    .5,-.5, 0
+    ],
+    
+    uv: [
+      1, 1,     0, 1,    0, 0,
+      1, 1,     0, 0,    1, 0
+    ],
+  });
+  W.add("billboard", W.models.plane);
 
-// Cube
-//
-//    v6----- v5
-//   /|      /|
-//  v1------v0|
-//  | |  x  | |
-//  | |v7---|-|v4
-//  |/      |/
-//  v2------v3
+  // Cube
+  //
+  //    v6----- v5
+  //   /|      /|
+  //  v1------v0|
+  //  | |  x  | |
+  //  | |v7---|-|v4
+  //  |/      |/
+  //  v2------v3
 
-W.add("cube", {
-  vertices: [
-    .5, .5, .5,  -.5, .5, .5,  -.5,-.5, .5, // front
-    .5, .5, .5,  -.5,-.5, .5,   .5,-.5, .5,
-    .5, .5,-.5,   .5, .5, .5,   .5,-.5, .5, // right
-    .5, .5,-.5,   .5,-.5, .5,   .5,-.5,-.5,
-    .5, .5,-.5,  -.5, .5,-.5,  -.5, .5, .5, // up
-    .5, .5,-.5,  -.5, .5, .5,   .5, .5, .5,
-   -.5, .5, .5,  -.5, .5,-.5,  -.5,-.5,-.5, // left
-   -.5, .5, .5,  -.5,-.5,-.5,  -.5,-.5, .5,
-   -.5, .5,-.5,   .5, .5,-.5,   .5,-.5,-.5, // back
-   -.5, .5,-.5,   .5,-.5,-.5,  -.5,-.5,-.5,
-    .5,-.5, .5,  -.5,-.5, .5,  -.5,-.5,-.5, // down
-    .5,-.5, .5,  -.5,-.5,-.5,   .5,-.5,-.5
-  ],
-  uv: [
-    1, 1,   0, 1,   0, 0, // front
-    1, 1,   0, 0,   1, 0,            
-    1, 1,   0, 1,   0, 0, // right
-    1, 1,   0, 0,   1, 0, 
-    1, 1,   0, 1,   0, 0, // up
-    1, 1,   0, 0,   1, 0,
-    1, 1,   0, 1,   0, 0, // left
-    1, 1,   0, 0,   1, 0,
-    1, 1,   0, 1,   0, 0, // back
-    1, 1,   0, 0,   1, 0,
-    1, 1,   0, 1,   0, 0, // down
-    1, 1,   0, 0,   1, 0
-  ]
-});
-W.cube = settings => W.setState(settings, 'cube');
+  W.add("cube", {
+    vertices: [
+      .5, .5, .5,  -.5, .5, .5,  -.5,-.5, .5, // front
+      .5, .5, .5,  -.5,-.5, .5,   .5,-.5, .5,
+      .5, .5,-.5,   .5, .5, .5,   .5,-.5, .5, // right
+      .5, .5,-.5,   .5,-.5, .5,   .5,-.5,-.5,
+      .5, .5,-.5,  -.5, .5,-.5,  -.5, .5, .5, // up
+      .5, .5,-.5,  -.5, .5, .5,   .5, .5, .5,
+    -.5, .5, .5,  -.5, .5,-.5,  -.5,-.5,-.5, // left
+    -.5, .5, .5,  -.5,-.5,-.5,  -.5,-.5, .5,
+    -.5, .5,-.5,   .5, .5,-.5,   .5,-.5,-.5, // back
+    -.5, .5,-.5,   .5,-.5,-.5,  -.5,-.5,-.5,
+      .5,-.5, .5,  -.5,-.5, .5,  -.5,-.5,-.5, // down
+      .5,-.5, .5,  -.5,-.5,-.5,   .5,-.5,-.5
+    ],
+    uv: [
+      1, 1,   0, 1,   0, 0, // front
+      1, 1,   0, 0,   1, 0,            
+      1, 1,   0, 1,   0, 0, // right
+      1, 1,   0, 0,   1, 0, 
+      1, 1,   0, 1,   0, 0, // up
+      1, 1,   0, 0,   1, 0,
+      1, 1,   0, 1,   0, 0, // left
+      1, 1,   0, 0,   1, 0,
+      1, 1,   0, 1,   0, 0, // back
+      1, 1,   0, 0,   1, 0,
+      1, 1,   0, 1,   0, 0, // down
+      1, 1,   0, 0,   1, 0
+    ]
+  });
 
-// Pyramid
-//
-//      ^
-//     /\\
-//    // \ \
-//   /+-x-\-+
-//  //     \/
-//  +------+
+  // Pyramid
+  //
+  //      ^
+  //     /\\
+  //    // \ \
+  //   /+-x-\-+
+  //  //     \/
+  //  +------+
 
-W.add("pyramid", {
-  vertices: [
-    -.5,-.5, .5,   .5,-.5, .5,    0, .5,  0,  // Front
-     .5,-.5, .5,   .5,-.5,-.5,    0, .5,  0,  // Right
-     .5,-.5,-.5,  -.5,-.5,-.5,    0, .5,  0,  // Back
-    -.5,-.5,-.5,  -.5,-.5, .5,    0, .5,  0,  // Left
-     .5,-.5, .5,  -.5,-.5, .5,  -.5,-.5,-.5, // down
-     .5,-.5, .5,  -.5,-.5,-.5,   .5,-.5,-.5
-  ],
-  uv: [
-    0, 0,   1, 0,  .5, 1,  // Front
-    0, 0,   1, 0,  .5, 1,  // Right
-    0, 0,   1, 0,  .5, 1,  // Back
-    0, 0,   1, 0,  .5, 1,  // Left
-    1, 1,   0, 1,   0, 0,  // down
-    1, 1,   0, 0,   1, 0
-  ]
-});
+  W.add("pyramid", {
+    vertices: [
+      -.5,-.5, .5,   .5,-.5, .5,    0, .5,  0,  // Front
+      .5,-.5, .5,   .5,-.5,-.5,    0, .5,  0,  // Right
+      .5,-.5,-.5,  -.5,-.5,-.5,    0, .5,  0,  // Back
+      -.5,-.5,-.5,  -.5,-.5, .5,    0, .5,  0,  // Left
+      .5,-.5, .5,  -.5,-.5, .5,  -.5,-.5,-.5, // down
+      .5,-.5, .5,  -.5,-.5,-.5,   .5,-.5,-.5
+    ],
+    uv: [
+      0, 0,   1, 0,  .5, 1,  // Front
+      0, 0,   1, 0,  .5, 1,  // Right
+      0, 0,   1, 0,  .5, 1,  // Back
+      0, 0,   1, 0,  .5, 1,  // Left
+      1, 1,   0, 1,   0, 0,  // down
+      1, 1,   0, 0,   1, 0
+    ]
+  });
 
-// Sphere
-//
-//          =   =
-//       =         =
-//      =           =
-//     =      x      =
-//      =           =
-//       =         =
-//          =   =
+  // Sphere
+  //
+  //          =   =
+  //       =         =
+  //      =           =
+  //     =      x      =
+  //      =           =
+  //       =         =
+  //          =   =
 
-((i, ai, j, aj, p1, p2, vertices = [], indices = [], uv = [], precision = 20) => {
+  ((i, ai, j, aj, p1, p2, vertices = [], indices = [], uv = [], precision = 20) => {
     for (j = 0; j <= precision; j++) {
-    aj = j * Math.PI / precision;
+      aj = j * Math.PI / precision;
       for (i = 0; i <= precision; i++) {
-      ai = i * 2 * Math.PI / precision;
-      vertices.push(Math.sin(ai) * Math.sin(aj)/2, Math.cos(aj)/2, Math.cos(ai) * Math.sin(aj)/2);
-      uv.push((Math.sin((i/precision))) * 3.5, -Math.sin(j/precision))
+        ai = i * 2 * Math.PI / precision;
+        vertices.push(Math.sin(ai) * Math.sin(aj)/2, Math.cos(aj)/2, Math.cos(ai) * Math.sin(aj)/2);
+        uv.push((Math.sin((i/precision))) * 3.5, -Math.sin(j/precision))
         if (i < precision && j < precision) {
-        indices.push(p1 = j * (precision + 1) + i, p2 = p1 + (precision + 1), (p1 + 1), (p1 + 1), p2, (p2 + 1));
+          indices.push(p1 = j * (precision + 1) + i, p2 = p1 + (precision + 1), (p1 + 1), (p1 + 1), p2, (p2 + 1));
+        }
       }
     }
-  }
-  W.add("sphere", {vertices, uv, indices});
-})();
+    W.add("sphere", {vertices, uv, indices});
+  })();
+}
