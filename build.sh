@@ -16,7 +16,9 @@ terser w.js \
     --define W.plugin.debug=false \
     --define W.plugin.smooth=true \
     --define W.plugin.builtinShapes=true \
-    > w.full.min.js
+    > w.min.full.js
+zip -9 -q w.min.full.zip w.min.full.js
+./ect-0.8.3.exe -9 -zip -quiet "w.min.full.zip"
 
 # Build the lite version
 terser w.js \
@@ -26,14 +28,12 @@ terser w.js \
     --define W.plugin.debug=false \
     --define W.plugin.smooth=false \
     --define W.plugin.builtinShapes=false \
-    > w.lite.min.js
-
-# Zip both files
-zip -9 w.full.min.zip w.full.min.js
-zip -9 w.lite.min.zip w.lite.min.js
+    > w.min.lite.js
+zip -9 -q w.min.lite.zip w.min.lite.js
+./ect-0.8.3.exe -9 -zip -quiet "w.min.lite.zip"
 
 # Print file sizes
-echo "w.full.min.js:  $(ls -l w.full.min.js | awk '{print $5}') bytes"
-echo "w.lite.min.js:  $(ls -l w.lite.min.js | awk '{print $5}') bytes"
-echo "w.full.min.zip: $(ls -l w.full.min.zip | awk '{print $5}') bytes"
-echo "w.lite.min.zip: $(ls -l w.lite.min.zip | awk '{print $5}') bytes"
+echo "w.min.full.js:  $(ls -l w.min.full.js | awk '{print $5}') bytes"
+echo "w.min.lite.js:  $(ls -l w.min.lite.js | awk '{print $5}') bytes"
+echo "w.min.full.zip: $(ls -l w.min.full.zip | awk '{print $5}') bytes"
+echo "w.min.lite.zip: $(ls -l w.min.lite.zip | awk '{print $5}') bytes"
