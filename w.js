@@ -46,20 +46,48 @@ W = {
       shader = W.gl.createShader(35633 /* VERTEX_SHADER */),
       
       `#version 300 es
-      precision highp float;                        // Set default float precision
-      in vec4 pos, col, uv, normal;                 // Vertex attributes: position, color, texture coordinates, normal (if any)
-      uniform mat4 pv, eye, m;                      // Uniform transformation matrices: projection * view, eye, model
-      uniform vec4 bb;                              // If the current shape is a billboard: bb = [w, h, 1.0, 0.0]
-      out vec4 v_pos, v_col, v_uv, v_normal;        // Varyings sent to the fragment shader: position, color, texture coordinates, normal (if any)
-      void main() {                                 
-        gl_Position = pv * (                        // Set vertex position: p * v * v_pos
-          v_pos = bb.z > 0.                         // Set v_pos varying:
-          ? m[3] + eye * (pos * bb)                 // Billboards always face the camera:  p * v * distance + eye * (position * [w, h, 1.0, 0.0])
-          : m * pos                                 // Other objects rotate normally:      p * v * m * position
-        );                                          
-        v_col = col;                                // Set varyings 
-        v_uv = uv;
-        v_normal = transpose(inverse(m)) * normal;  // recompute normals to match model thansformation
+
+      // Set default float precision
+      precision highp float;
+
+      // options:
+      // - [smooth, shading enabled, ambient, mix]
+      // - [w, h, billboard, 0.0]
+      // - [light_dx, light_dy, light_dz, 0.0]
+      uniform vec4 o[3];
+
+      // Uniform transformation matrices: projection * view, eye, model
+      uniform mat4 pv, eye, m;
+
+      // Vertex attributes
+      in vec4 pos, col, uv, normal;
+
+      // Varyings sent to the fragment shader:
+      // - position
+      // - color
+      // - texture coordinates
+      // - normal
+      out vec4 v[4];
+
+      void main() {
+
+        // Set vertex position: pv * pos
+        gl_Position = pv * (
+          v[0] = o[1].z > 0.
+
+            // Billboards always face the camera:  pv * distance + eye * (position * [w, h, 1.0, 0.0])
+            ? m[3] + eye * (pos * o[1])
+
+            // Other objects rotate normally:      pv * m * position
+            : m * pos
+        );
+
+        // Set varyings 
+        v[1] = col;
+        v[2] = uv;
+
+        // recompute normals to match model thansformation
+        v[3] = transpose(inverse(m)) * normal;
       }`
     );
     
@@ -75,25 +103,56 @@ W = {
       shader = W.gl.createShader(35632 /* FRAGMENT_SHADER */),
       
       `#version 300 es
-      precision highp float;                  // Set default float precision
-      in vec4 v_pos, v_col, v_uv, v_normal;   // Varyings received from the vertex shader: position, color, texture coordinates, normal (if any)
-      uniform vec3 l;                         // Uniform: light direction, smooth normals enabled
-      uniform vec4 o;                         // options [smooth, shading enabled, ambient, mix]
-      uniform sampler2D s;                    // Uniform: 2D texture
-      out vec4 c;                             // Output: final fragment color
+
+      // Set default float precision
+      precision highp float;
+
+      // options:
+      // - [smooth, shading enabled, ambient, mix]
+      // - [w, h, billboard, 0.0]
+      // - [light_dx, light_dy, light_dz, 0.0]
+      uniform vec4 o[3];
+
+      // Varyings received from the vertex shader:
+      // - position
+      // - color
+      // - texture coordinates
+      // - normal
+      in vec4 v[4];
+
+      // Model texture sampler
+      uniform sampler2D s;
+
+      // Output: final fragment color
+      out vec4 c;
 
       // The code below displays colored / textured / shaded fragments
       void main() {
-        c = mix(texture(s, v_uv.xy), v_col, o[3]);        // base color (mix of texture and rgba)
-        if(o[1] > 0.){                                    // if lighting/shading is enabled:
-          c = vec4(                                       // output = vec4(base color RGB * (directional shading + ambient light)), base color Alpha
-            c.rgb * (max(0., dot(l, -normalize(           // Directional shading: compute dot product of light direction and normal (0 if negative)
-              o[0] > 0.                                   // if smooth shading is enabled:
-              ? v_normal.xyz                              // use smooth normals passed as varying
-              : cross(dFdx(v_pos.xyz), dFdy(v_pos.xyz))   // else, compute flat normal by making a cross-product with the current fragment and its x/y neighbours
+        // base color (mix of texture and rgba)
+        c = mix(texture(s, v[2].xy), v[1], o[0].w);
+
+        // if lighting/shading is enabled:
+        if (o[0].y > 0.) {
+
+          // output = vec4(base color RGB * (directional shading + ambient light)), base color Alpha
+          c = vec4(
+
+            // Directional shading: compute dot product of light direction and normal (0 if negative)
+            c.rgb * (max(0., dot(o[2].xyz, -normalize(
+              o[0].x > 0.
+
+                // If smooth shading is enabled, use smooth normals passed as varying
+                ? v[3].xyz
+
+                // else, compute flat normal by making a cross-product with the current fragment and its x/y neighbours
+              : cross(dFdx(v[0].xyz), dFdy(v[0].xyz))
             )))
-            + o[2]),                                      // add ambient light passed as uniform
-            c.a                                           // use base color's alpha
+
+            // add ambient light passed as uniform
+            + o[0].z),
+
+            // use base color's alpha
+            c.a
           );
         }
       }`
@@ -262,12 +321,6 @@ W = {
     
     // Disable alpha blending for the next frame
     W.gl.disable(3042 /* BLEND */);
-    
-    // Transition the light's direction and send it to the shaders
-    W.gl.uniform3f(
-      W.gl.getUniformLocation(W.program, "l"),
-      W.lerp('light','x'), W.lerp('light','y'), W.lerp('light','z')
-    );
   },
   
   // Render an object
@@ -363,11 +416,17 @@ W = {
         W.gl.enableVertexAttribArray(buffer);
       }
       
-      // Other options: [smooth, shading enabled, ambient light, texture/color mix]
-      W.gl.uniform4f(
-
-        W.gl.getUniformLocation(W.program, 'o'), 
-        
+      // Other options: [
+      //    smooth,
+      //    shading enabled,
+      //    ambient light,
+      //    texture/color mix,
+      //    width,
+      //    height,
+      //    isBillboard = 1,
+      //    0,
+      // ]
+      W.gl.uniform4fv(W.gl.getUniformLocation(W.program, 'o'), [
         // Enable smooth shading if "s" is true
         object.s,
         
@@ -379,24 +438,24 @@ W = {
         
         // Texture/color mix (if a texture is present. 0: fully textured, 1: fully colored)
         object.mix,
-      );
-      
-      // If the object is a billboard: send a specific uniform to the shaders:
-      // [width, height, isBillboard = 1, 0]
-      W.gl.uniform4f(
-        W.gl.getUniformLocation(W.program, 'bb'),
         
         // Size
         object.w,
-        object.h,               
+        object.h,
 
         // is a billboard
         (W.plugin.builtinShapes) ? object.type == 'billboard' : 0,
-        
+
         // Reserved
-        0
-      );
-      
+        0,
+
+        // Also send over light parameters in the same shader.
+        // Yes, this is expensive.
+        W.lerp('light','x'),
+        W.lerp('light','y'),
+        W.lerp('light','z'),
+        0,
+      ]);
         
       // Set the object's color
       W.gl.vertexAttrib4fv(
