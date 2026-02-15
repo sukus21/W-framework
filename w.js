@@ -48,7 +48,7 @@ W = {
       `#version 300 es
       precision highp float;                        // Set default float precision
       in vec4 pos, col, uv, normal;                 // Vertex attributes: position, color, texture coordinates, normal (if any)
-      uniform mat4 pv, eye, m, im;                  // Uniform transformation matrices: projection * view, eye, model, inverse model
+      uniform mat4 pv, eye, m;                      // Uniform transformation matrices: projection * view, eye, model
       uniform vec4 bb;                              // If the current shape is a billboard: bb = [w, h, 1.0, 0.0]
       out vec4 v_pos, v_col, v_uv, v_normal;        // Varyings sent to the fragment shader: position, color, texture coordinates, normal (if any)
       void main() {                                 
@@ -77,19 +77,19 @@ W = {
       `#version 300 es
       precision highp float;                  // Set default float precision
       in vec4 v_pos, v_col, v_uv, v_normal;   // Varyings received from the vertex shader: position, color, texture coordinates, normal (if any)
-      uniform vec3 light;                     // Uniform: light direction, smooth normals enabled
+      uniform vec3 l;                         // Uniform: light direction, smooth normals enabled
       uniform vec4 o;                         // options [smooth, shading enabled, ambient, mix]
-      uniform sampler2D sampler;              // Uniform: 2D texture
+      uniform sampler2D s;                    // Uniform: 2D texture
       out vec4 c;                             // Output: final fragment color
 
       // The code below displays colored / textured / shaded fragments
       void main() {
-        c = mix(texture(sampler, v_uv.xy), v_col, o[3]);  // base color (mix of texture and rgba)
+        c = mix(texture(s, v_uv.xy), v_col, o[3]);        // base color (mix of texture and rgba)
         if(o[1] > 0.){                                    // if lighting/shading is enabled:
           c = vec4(                                       // output = vec4(base color RGB * (directional shading + ambient light)), base color Alpha
-            c.rgb * (max(0., dot(light, -normalize(       // Directional shading: compute dot product of light direction and normal (0 if negative)
+            c.rgb * (max(0., dot(l, -normalize(           // Directional shading: compute dot product of light direction and normal (0 if negative)
               o[0] > 0.                                   // if smooth shading is enabled:
-              ? vec3(v_normal.xyz)                        // use smooth normals passed as varying
+              ? v_normal.xyz                              // use smooth normals passed as varying
               : cross(dFdx(v_pos.xyz), dFdy(v_pos.xyz))   // else, compute flat normal by making a cross-product with the current fragment and its x/y neighbours
             )))
             + o[2]),                                      // add ambient light passed as uniform
@@ -140,7 +140,7 @@ W = {
     // If a new texture is provided, build it and save it in W.textures
     if(state.t && state.t.width && !W.textures[state.t.id]){
       texture = W.gl.createTexture();
-      W.gl.pixelStorei(37441 /* UNPACK_PREMULTIPLY_ALPHA_WEBGL */, true);
+      W.gl.pixelStorei(37441 /* UNPACK_PREMULTIPLY_ALPHA_WEBGL */, 1);
       W.gl.bindTexture(3553 /* TEXTURE_2D */, texture);
       W.gl.pixelStorei(37440 /* UNPACK_FLIP_Y_WEBGL */, 1);
       W.gl.texImage2D(3553 /* TEXTURE_2D */, 0, 6408 /* RGBA */, 6408 /* RGBA */, 5121 /* UNSIGNED_BYTE */, state.t);
@@ -194,7 +194,7 @@ W = {
     v = W.animation('camera');
     
     // If the camera is in a group
-    if(W.next?.camera?.g){
+    if(W.next.camera.g){
 
       // premultiply the camera matrix by the group's model matrix.
       v.preMultiplySelf(W.next[W.next.camera.g].M || W.next[W.next.camera.g].m);
@@ -203,21 +203,23 @@ W = {
     // Send it to the shaders as the Eye matrix
     W.gl.uniformMatrix4fv(
       W.gl.getUniformLocation(W.program, 'eye'),
-      false,
-      v.toFloat32Array()
+      0,
+      v.toFloat32Array(),
     );
     
-    // Invert it to obtain the View matrix
-    v.invertSelf();
-
-    // Premultiply it with the Perspective matrix to obtain a Projection-View matrix
-    v.preMultiplySelf(W.projection);
-    
-    // send it to the shaders as the pv matrix
+    // Build and send perspective matrix to the shaders
     W.gl.uniformMatrix4fv(
       W.gl.getUniformLocation(W.program, 'pv'),
-      false,
-      v.toFloat32Array()
+      0,
+      v
+        // Invert it to obtain the View matrix
+        .invertSelf()
+
+        // Premultiply it with the Perspective matrix to obtain a Projection-View matrix
+        .preMultiplySelf(W.projection)
+
+        // Pack for shader storage
+        .toFloat32Array(),
     );
 
     // Clear canvas
@@ -263,7 +265,7 @@ W = {
     
     // Transition the light's direction and send it to the shaders
     W.gl.uniform3f(
-      W.gl.getUniformLocation(W.program, 'light'),
+      W.gl.getUniformLocation(W.program, "l"),
       W.lerp('light','x'), W.lerp('light','y'), W.lerp('light','z')
     );
   },
@@ -278,7 +280,7 @@ W = {
       W.gl.bindTexture(3553 /* TEXTURE_2D */, W.textures[object.t.id]);
 
       // Pass texture 0 to the sampler
-      W.gl.uniform1i(W.gl.getUniformLocation(W.program, 'sampler'), 0);
+      W.gl.uniform1i(W.gl.getUniformLocation(W.program, 's'), 0);
     }
 
     // If the object has an animation, increment its timer...
@@ -300,15 +302,8 @@ W = {
     // send the model matrix to the vertex shader
     W.gl.uniformMatrix4fv(
       W.gl.getUniformLocation(W.program, 'm'),
-      false,
-      (W.next[object.n].M || W.next[object.n].m).toFloat32Array()
-    );
-    
-    // send the inverse of the model matrix to the vertex shader
-    W.gl.uniformMatrix4fv(
-      W.gl.getUniformLocation(W.program, 'im'),
-      false,
-      (new DOMMatrix(W.next[object.n].M || W.next[object.n].m)).invertSelf().toFloat32Array()
+      0,
+      (W.next[object.n].M || W.next[object.n].m).toFloat32Array(),
     );
 
     // Show warning if model doesn't exist (debug only)
@@ -351,20 +346,20 @@ W = {
       
       // Set up the position buffer
       W.gl.bindBuffer(34962 /* ARRAY_BUFFER */, model.verticesBuffer);
-      W.gl.vertexAttribPointer(buffer = W.gl.getAttribLocation(W.program, 'pos'), 3, 5126 /* FLOAT */, false, 0, 0)
+      W.gl.vertexAttribPointer(buffer = W.gl.getAttribLocation(W.program, 'pos'), 3, 5126 /* FLOAT */, 0, 0, 0)
       W.gl.enableVertexAttribArray(buffer);
       
       // Set up the texture coordinatess buffer (if any)
       if (model.uvBuffer) {
         W.gl.bindBuffer(34962 /* ARRAY_BUFFER */, model.uvBuffer);
-        W.gl.vertexAttribPointer(buffer = W.gl.getAttribLocation(W.program, 'uv'), 2, 5126 /* FLOAT */, false, 0, 0);
+        W.gl.vertexAttribPointer(buffer = W.gl.getAttribLocation(W.program, 'uv'), 2, 5126 /* FLOAT */, 0, 0, 0);
         W.gl.enableVertexAttribArray(buffer);
       }
       
       // Set the normals buffer
       if ((object.s || model.customNormals) && model.normalsBuffer) {
         W.gl.bindBuffer(34962 /* ARRAY_BUFFER */, model.normalsBuffer);
-        W.gl.vertexAttribPointer(buffer = W.gl.getAttribLocation(W.program, 'normal'), 3, 5126 /* FLOAT */, false, 0, 0);
+        W.gl.vertexAttribPointer(buffer = W.gl.getAttribLocation(W.program, 'normal'), 3, 5126 /* FLOAT */, 0, 0, 0);
         W.gl.enableVertexAttribArray(buffer);
       }
       
@@ -402,21 +397,19 @@ W = {
         0
       );
       
-      // Set up the indices (if any)
-      if (model.indicesBuffer) {
-        W.gl.bindBuffer(34963 /* ELEMENT_ARRAY_BUFFER */, model.indicesBuffer);
-      }
         
       // Set the object's color
       W.gl.vertexAttrib4fv(
         W.gl.getAttribLocation(W.program, 'col'),
-        W.col(object.b)
+        W.col(object.b),
       );
 
       // Draw
       // Both indexed and unindexed models are supported.
       // You can keep the "drawElements" only if all your models are indexed.
       if (model.indicesBuffer) {
+        // Set up the indices (if any)
+        W.gl.bindBuffer(34963 /* ELEMENT_ARRAY_BUFFER */, model.indicesBuffer);
         W.gl.drawElements(object.mode, model.indices.length, 5123 /* UNSIGNED_SHORT */, 0);
       }
       else {
